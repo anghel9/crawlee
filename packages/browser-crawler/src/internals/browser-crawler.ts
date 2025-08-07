@@ -433,6 +433,7 @@ export abstract class BrowserCrawler<
         const newPageOptions: Dictionary = {
             id: crawlingContext.id,
         };
+        this.log.info('_runRequestHandler begins'); // TODO remove this line
 
         const useIncognitoPages = this.launchContext?.useIncognitoPages;
 
@@ -470,9 +471,11 @@ export abstract class BrowserCrawler<
         const { request, session } = crawlingContext;
 
         if (!request.skipNavigation) {
+            this.log.info('_handleNavigation is called on next line'); // TODO remove this line
             await this._handleNavigation(crawlingContext);
             tryCancel();
 
+            this.log.info('_responseHandler is called on next line'); // TODO remove this line
             await this._responseHandler(crawlingContext);
             tryCancel();
 
@@ -504,12 +507,12 @@ export abstract class BrowserCrawler<
 
         request.state = RequestState.REQUEST_HANDLER;
         try {
+            this.log.info('user requestHandler is run and its timeout begins'); // TODO remove this line
             await addTimeoutToPromise(
                 async () => Promise.resolve(this.userProvidedRequestHandler(crawlingContext as LoadedContext<Context>)),
                 this.requestHandlerTimeoutInnerMillis,
                 `requestHandler timed out after ${this.requestHandlerTimeoutInnerMillis / 1000} seconds.`,
             );
-
             request.state = RequestState.DONE;
         } catch (e: any) {
             request.state = RequestState.ERROR;
@@ -556,21 +559,35 @@ export abstract class BrowserCrawler<
     }
 
     protected async _handleNavigation(crawlingContext: Context) {
+        this.log.info('_handleNavigation begins'); // TODO remove this line
         const gotoOptions = { timeout: this.navigationTimeoutMillis } as unknown as GoToOptions;
 
         const preNavigationHooksCookies = this._getCookieHeaderFromRequest(crawlingContext.request);
 
         crawlingContext.request.state = RequestState.BEFORE_NAV;
-        await this._executeHooks(this.preNavigationHooks, crawlingContext, gotoOptions);
+        // await this._executeHooks(this.preNavigationHooks, crawlingContext, gotoOptions); // placed this in a timeout
+        // timeout length just meant for testing
+        await addTimeoutToPromise(
+            async() => Promise.resolve(await this._executeHooks(this.preNavigationHooks, crawlingContext, gotoOptions)),
+            10_000,
+            `preNavigationHooks timed out after 10 seconds.`,
+        );
         tryCancel();
 
         const postNavigationHooksCookies = this._getCookieHeaderFromRequest(crawlingContext.request);
 
-        await this._applyCookies(crawlingContext, preNavigationHooksCookies, postNavigationHooksCookies);
+        await addTimeoutToPromise(
+            async() => Promise.resolve(await this._applyCookies(crawlingContext, preNavigationHooksCookies, postNavigationHooksCookies)),
+            10_000,
+            `applyCookies timed out after 10 seconds.`,
+        );
+        // await this._applyCookies(crawlingContext, preNavigationHooksCookies, postNavigationHooksCookies); // placed this in a timeout
 
         try {
+            this.log.info('_navigationHandler is called and nav timeout begins'); // TODO remove this line
             crawlingContext.response = (await this._navigationHandler(crawlingContext, gotoOptions)) ?? undefined;
         } catch (error) {
+            this.log.info('_handleNavigation error is caught'); // TODO remove this line
             await this._handleNavigationTimeout(crawlingContext, error as Error);
 
             crawlingContext.request.state = RequestState.ERROR;
@@ -606,11 +623,10 @@ export abstract class BrowserCrawler<
      */
     protected async _handleNavigationTimeout(crawlingContext: Context, error: Error): Promise<void> {
         const { session } = crawlingContext;
-
+        this.log.info('inside _handleNavigationTimeout'); // TODO remove this line
         if (error && error.constructor.name === 'TimeoutError') {
             handleRequestTimeout({ session, errorMessage: error.message });
         }
-
         await crawlingContext.page.close();
     }
 
@@ -633,6 +649,7 @@ export abstract class BrowserCrawler<
      */
     protected async _responseHandler(crawlingContext: Context): Promise<void> {
         const { response, session, request, page } = crawlingContext;
+        this.log.info('_responseHandler begins'); // TODO remove this line
 
         if (typeof response === 'object' && typeof response.status === 'function') {
             const status: number = response.status();
